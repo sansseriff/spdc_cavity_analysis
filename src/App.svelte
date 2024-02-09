@@ -134,10 +134,8 @@
     isMounted = true;
   });
 
-  // afterUpdate(() => {
 
-  // });
-
+  // modified from https://observablehq.com/@sw1227/reusable-2d-array-image-function
   function imshow(data, pixelSize, color) {
     // Flatten 2D input array
     const flat = [].concat.apply([], data);
