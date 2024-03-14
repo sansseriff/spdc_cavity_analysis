@@ -52,7 +52,7 @@
     BW: 10e-9, // bandwidth in m
     WLSigma: 0.815, // sigma in nm
     L: 1, // length in mm
-    L_multiplier: 1.300,
+    L_multiplier: 1.708,
     R1: 0.85,
     R2: 0.1,
     Texpt: 128.25,
@@ -161,6 +161,10 @@
 
       dwdm_filterCDS.data.y_idler_airy = filter_comb_idler_and_airy;
       dwdm_filterCDS.data.y_signal_airy = filter_comb_signal_and_airy;
+      dwdm_filterCDS.data.asignal = ASignal;
+      dwdm_filterCDS.data.aidler = AIdler;
+
+
       dwdm_filterCDS.change.emit();
       signalCDS.change.emit();
       idlerCDS.change.emit();
@@ -210,6 +214,9 @@
 
           y_idler_airy: filter_comb_idler_and_airy,
           y_signal_airy: filter_comb_signal_and_airy,
+
+          asignal: ASignal,
+          aidler: AIdler,
         },
       });
 
@@ -291,6 +298,7 @@
         { field: "y_idler" },
         {
           line_width: 3,
+          line_alpha: 0.3,
           source: dwdm_filterCDS,
           line_color: "#333333",
         },
@@ -301,6 +309,7 @@
         { field: "y_signal" },
         {
           line_width: 3,
+          line_alpha: 0.3,
           source: dwdm_filterCDS,
           line_color: "#FF3333",
         },
@@ -323,6 +332,28 @@
           line_width: 3,
           source: dwdm_filterCDS,
           line_color: "#33FF33",
+        },
+      );
+
+      const filter_line_asingal = filter_graph.line(
+        { field: "x_signal" },
+        { field: "asignal" },
+        {
+          line_width: 3,
+          line_alpha: 0.3,
+          source: dwdm_filterCDS,
+          line_color: "#333333",
+        },
+      );
+
+      const filter_line_aidler = filter_graph.line(
+        { field: "x_idler" },
+        { field: "aidler" },
+        {
+          line_width: 3,
+          line_alpha: 0.3,
+          source: dwdm_filterCDS,
+          line_color: "#333333",
         },
       );
 
@@ -811,7 +842,7 @@
     position: relative;
     top: 90px;
     left: 740px;
-    width: 700px;
+    width: 1500px;
     height: 0px;
   }
 
