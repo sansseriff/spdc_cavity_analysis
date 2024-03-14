@@ -181,9 +181,9 @@ export function phase_matching(WL1, WL2, index_function, T, polling_period, leng
     const delK = delta_k(WL1, WL2, index_function, T, polling_period, debug_show);
     let phase = Math.pow((Math.sin(delK*length/2)/(delK*length/2)),2);
 
-    if (debug_show) {
-        phase = phase*10;
-    }
+    // if (debug_show) {
+    //     phase = 20;
+    // }
     return phase;
 }
 
@@ -192,7 +192,8 @@ export function phase_matching(WL1, WL2, index_function, T, polling_period, leng
 export function wl_pump_by_energy_conservation(WL1, WL2, index_function, T) {
     const nWL1 = index_function(WL1, T);
     const nWL2 = index_function(WL2, T);
-    const pumpWL = 1/((nWL1/WL1) + (nWL2/WL2));
+    // const pumpWL = 1/((nWL1/WL1) + (nWL2/WL2));
+    const pumpWL = 1/((1/WL1) + (1/WL2));
     return pumpWL;
 }
 
@@ -213,6 +214,7 @@ export function delta_k(WL1, WL2, index_function, T, polling_period, debug_show 
     const delta_k = 2 * Math.PI * (nPump/WL_pump - nWL1/WL1 - nWL2/WL2 - 1/polling_period);
 
     if (debug_show) {
+        // console.log(nPump)
         // console.log("nWL1: ", nWL1);
         // console.log("nWL2: ", nWL2);
         // console.log("nPump: ", nPump);
@@ -261,4 +263,53 @@ export function create_50ghz_wl() {
     return wl.reverse();
 }
 
-// create_50ghz_wl();
+export function interp(x, xp, yp) {
+    if (xp.length !== yp.length) {
+        throw new Error('xp and yp must have the same length');
+    }
+
+    if (xp.length === 1) {
+        return Array.isArray(x) ? Array(x.length).fill(yp[0]) : yp[0];
+    }
+
+    const interpolate = (xi) => {
+        for (let i = 0; i < xp.length - 1; i++) {
+            if (xi >= xp[i] && xi <= xp[i + 1]) {
+                const slope = (yp[i + 1] - yp[i]) / (xp[i + 1] - xp[i]);
+                return yp[i] + slope * (xi - xp[i]);
+            }
+        }
+
+        // // Slope Extrapolation
+        // if (xi < xp[0]) {
+        //     return yp[0] + (xi - xp[0]) * (yp[1] - yp[0]) / (xp[1] - xp[0]);
+        // } else {
+        //     const n = xp.length;
+        //     return yp[n - 1] + (xi - xp[n - 1]) * (yp[n - 1] - yp[n - 2]) / (xp[n - 1] - xp[n - 2]);
+        // }
+
+        // Constant value extrapolation
+        if (xi < xp[0]) {
+            return yp[0];
+        } else {
+            return yp[yp.length - 1];
+        }
+    };
+
+    return Array.isArray(x) ? x.map(interpolate) : interpolate(x);
+}
+
+
+export function RaicolNDataPPKTP(data) {
+    this.wl = data.x.map((wl) => wl * 1e-6);
+    this.n = data.y
+
+
+    // I need to use an arrow function here because I end up not 
+    // calling the function directly 'on' the object
+    this.index_function = (WL, T, debug=false) => {
+        // console.log("this.wl: ", this.wl)
+        return interp(WL, this.wl, this.n);
+    }
+}
+

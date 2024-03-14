@@ -16,6 +16,7 @@
     sellimeier_ppln_single,
     n_ppln,
     phase_matching,
+    RaicolNDataPPKTP,
   } from "./util.js";
 
   let canvas; // reference to the canvas element
@@ -34,7 +35,10 @@
   let previousParams = {};
   let canvas_initialized = false;
   let dwdm_filter_spectrum;
+  let n_raicol_ppktp_data;
   let index_function;
+
+  let raicol_n;
 
   const params = {
     show_2d: true,
@@ -43,8 +47,8 @@
     numWLs: 501,
     BW: 10e-9, // bandwidth in m
     WLSigma: 0.815, // sigma in nm
-    L: 0.00133, // length in mm
-    L_multiplier: 1000,
+    L: 1, // length in mm
+    L_multiplier: 1.300,
     R1: 0.85,
     R2: 0.1,
     Texpt: 128.25,
@@ -56,7 +60,7 @@
     end_idler: 1568.36,
     start_signal: 1528.77,
     end_signal: 1548.11,
-    polling_period: 1 / 2206080
+    polling_period: 1 / 28380
   };
 
   const wl_50ghz = create_50ghz_wl(); //goes from short to long wl in nm
@@ -65,7 +69,6 @@
   const WLCenteral = params.WLpumpair * 1e-9 * 2;
 
   function compute_result(p, init) {
-    // console.log("show 2d: ", p.show_2d);
     const Omega0 = (2 * Math.PI * p.c) / (2 * p.WLpumpair * 1e-9);
     const WLCenteral = p.WLpumpair * 1e-9 * 2;
 
@@ -92,14 +95,14 @@
     let nIdler = new Array(WLSignalairJSI.length).fill(1);
 
     if (p.ppktp_checked) {
-      nSignal = new Array(WLSignalairJSI.length).fill(1.9);
-      nIdler = new Array(WLSignalairJSI.length).fill(1.9);
-      index_function = n_raicol_ppktp;
+
+      index_function = raicol_n.index_function;
     } else {
-      nSignal = Sellimeier_PPLN(WLSignalairJSI, "eray", p.Texpt);
-      nIdler = Sellimeier_PPLN(WLIdlerairJSI, "eray", p.Texpt);
       index_function = n_ppln;
     }
+
+    nSignal = WLSignalairJSI.map((wl) => index_function(wl, p.Texpt));
+    nIdler = WLIdlerairJSI.map((wl) => index_function(wl, p.Texpt));
 
     const ASignal = AiryFunction(p.R1, p.R2, L, nSignal, WLSignalairJSI);
     const AIdler = AiryFunction(p.R1, p.R2, L, nIdler, WLIdlerairJSI);
@@ -112,14 +115,22 @@
     // const p.
     const FSigma = (WLSigma * p.c) / (2 * p.WLpumpair * 1e-9) ** 2;
 
+    // const full_spectrum = linspace(
+    //   wl_50ghz[0],
+    //   wl_50ghz[wl_50ghz.length - 1],
+    //   501,
+    // );
+
     const full_spectrum = linspace(
-      wl_50ghz[0],
-      wl_50ghz[wl_50ghz.length - 1],
+      500,
+      3500,
       501,
     );
     const full_index = full_spectrum.map((value) =>
       index_function(value * 1e-9, p.Texpt, false),
     );
+
+    // console.log("full index: ", full_index)
     // console.log(full_spectrum.map((value) => value * 1e-9))
     // console.log("index: ", full_index)
     // console.log("full spectrum: ", full_spectrum)
@@ -190,10 +201,16 @@
         output_backend: "webgl",
       });
 
+      // const index_graph = new Bokeh.Plotting.figure({
+      //   height: 300,
+      //   x_range: [wl_50ghz[0], wl_50ghz[wl_50ghz.length - 1]],
+      //   y_range: [0, 5],
+      // });
+
       const index_graph = new Bokeh.Plotting.figure({
         height: 300,
-        x_range: [wl_50ghz[0], wl_50ghz[wl_50ghz.length - 1]],
-        y_range: [0, 5],
+        x_range: [500, 3500],
+        y_range: [1.65, 1.825],
       });
 
       const filter_graph = new Bokeh.Plotting.figure({
@@ -332,7 +349,7 @@
     }
   }
 
-  $: if (isMounted && spectrum_data) {
+  $: if (isMounted && dwdm_filter_spectrum) {
     if (JSON.stringify(params) !== JSON.stringify(previousParams)) {
       // console.log('params changed');
       previousParams = { ...params };
@@ -340,14 +357,19 @@
     }
   }
 
-  // let wl_start = Math.round((WLCenteral - params.BW / 2) * 1e9);
-
-  // let wl_end = Math.round((WLCenteral + params.BW / 2) * 1e9);
 
   onMount(async () => {
-    const response = await fetch("./50_GHz_spectrum.json");
-    dwdm_filter_spectrum = await response.json();
+    const filter_response = await fetch("./50_GHz_spectrum.json");
+    dwdm_filter_spectrum = await filter_response.json();
+
+    const n_ppktp_data = await fetch("./ppKTP_n.json").then(response => response.json());
+
+    raicol_n = new RaicolNDataPPKTP(n_ppktp_data)
+
+
     compute_result(params, true);
+
+
 
     // Create axes
     const xAxis = d3.axisBottom(
@@ -567,9 +589,9 @@
     <p class="output">Pump WL</p>
     <input
       type="range"
-      min="700"
+      min="750"
       max="800"
-      step="0.01"
+      step="0.001"
       bind:value={params.WLpumpair}
       class="slider"
       id="myRange_1"
@@ -601,8 +623,8 @@
     <p class="output">Cavity Length</p>
     <input
       type="range"
-      min="0.001"
-      max="0.002"
+      min=".995"
+      max="1.005"
       step="0.000001"
       bind:value={params.L}
       class="slider"
@@ -712,7 +734,7 @@
   .graph_2d {
     position: relative;
     top: 90px;
-    left: 680px;
+    left: 740px;
     width: 700px;
     height: 0px;
   }
