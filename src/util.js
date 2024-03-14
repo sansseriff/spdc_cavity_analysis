@@ -1,3 +1,4 @@
+import { create } from "d3";
 import * as math from "mathjs";
 
 
@@ -313,3 +314,69 @@ export function RaicolNDataPPKTP(data) {
     }
 }
 
+function closestIndex(sortedArray, target) {
+    let start = 0;
+    let end = sortedArray.length - 1;
+
+    while (end - start > 1) {
+        let mid = Math.floor((start + end) / 2);
+        if (sortedArray[mid] < target) {
+            start = mid;
+        } else {
+            end = mid;
+        }
+    }
+
+    if (target - sortedArray[start] <= sortedArray[end] - target) {
+        return start;
+    }
+    return end;
+}
+
+export function FilterComb(filter_spectrum, wl_array) {
+    this.x = filter_spectrum.x;
+    this.y = filter_spectrum.y;
+    this.wl_array = wl_array;
+    this.out_array = Array(wl_array.length).fill(0);
+    console.log("length of out_array: ", this.out_array.length)
+
+    this.spacing_wl = create_50ghz_wl();
+    const center_of_filter_idx = 496;
+
+    const range = 0.2
+
+    for (let i = 0; i < this.spacing_wl.length; i++) {
+        
+        const spacing = this.spacing_wl[i];
+
+        const current_filter_xp = this.x.map((wl) => wl + spacing); // this makes x[496] equal to spacing
+        const current_filter_yp = this.y;
+
+        // index of wl in 'wl_array' that is closest to 'spacing'
+        const closest_wl_idx = closestIndex(this.wl_array, spacing);
+
+        this.out_array[closest_wl_idx] = interp(wl_array[closest_wl_idx], current_filter_xp, current_filter_yp);
+
+        for (let j = 1; j < this.wl_array.length; j++) {
+            const raw_out_idx_left = closest_wl_idx - j;
+            const raw_out_idx_right = closest_wl_idx + j;
+            const max_idx = this.wl_array.length - 1;
+            const min_idx = 0;
+
+
+
+            if ((raw_out_idx_right > max_idx) || (raw_out_idx_left > max_idx)|| (raw_out_idx_left < 0 || (raw_out_idx_right < 0)) ) {
+                break
+            }
+            this.out_array[raw_out_idx_left] = interp(wl_array[raw_out_idx_right], current_filter_xp, current_filter_yp);
+            this.out_array[raw_out_idx_right] = interp(wl_array[raw_out_idx_right], current_filter_xp, current_filter_yp);
+
+            
+
+            if (((wl_array[closest_wl_idx] - wl_array[raw_out_idx_left]) > range) || ((wl_array[raw_out_idx_right] - wl_array[closest_wl_idx]) > range)) {
+                break;
+            }
+        }
+    }
+    console.log("length of out_array: ", this.out_array.length)
+}

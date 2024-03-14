@@ -17,6 +17,7 @@
     n_ppln,
     phase_matching,
     RaicolNDataPPKTP,
+    FilterComb,
   } from "./util.js";
 
   let canvas; // reference to the canvas element
@@ -37,6 +38,9 @@
   let dwdm_filter_spectrum;
   let n_raicol_ppktp_data;
   let index_function;
+
+  let filter_comb_idler;
+  let filter_comb_signal;
 
   let raicol_n;
 
@@ -130,6 +134,10 @@
       index_function(value * 1e-9, p.Texpt, false),
     );
 
+
+
+    
+
     // console.log("full index: ", full_index)
     // console.log(full_spectrum.map((value) => value * 1e-9))
     // console.log("index: ", full_index)
@@ -142,14 +150,30 @@
       signalCDS.data.x.length == p.numWLs &&
       old_show_2d == p.show_2d
     ) {
+
+    const filter_comb_idler_and_airy = filter_comb_idler.out_array.map((value, i) => value * AIdler[i])
+    const filter_comb_signal_and_airy = filter_comb_signal.out_array.map((value, i) => value * ASignal[i])
+
       indexCDS.data.x = full_spectrum;
       indexCDS.data.y = full_index;
       signalCDS.data.y = ASignal;
       idlerCDS.data.y = AIdler;
+
+      dwdm_filterCDS.data.y_idler_airy = filter_comb_idler_and_airy;
+      dwdm_filterCDS.data.y_signal_airy = filter_comb_signal_and_airy;
+      dwdm_filterCDS.change.emit();
       signalCDS.change.emit();
       idlerCDS.change.emit();
       indexCDS.change.emit();
     } else {
+
+      filter_comb_idler = new FilterComb(dwdm_filter_spectrum, WLIdlerairJSI.map((value) => value * 1e9))
+      filter_comb_signal = new FilterComb(dwdm_filter_spectrum, WLSignalairJSI.map((value) => value * 1e9))
+
+      const filter_comb_idler_and_airy = filter_comb_idler.out_array.map((value, i) => value * AIdler[i])
+      const filter_comb_signal_and_airy = filter_comb_signal.out_array.map((value, i) => value * ASignal[i])
+
+
       // console.log("re-init")
       if (!p.show_2d) {
         const inner_off_array = Array(OmegaIdlerJSI.length).fill(1);
@@ -171,10 +195,21 @@
         },
       });
 
+      // dwdm_filterCDS = new Bokeh.ColumnDataSource({
+      //   data: {
+      //     x: dwdm_filter_spectrum.x,
+      //     y: dwdm_filter_spectrum.y,
+      //   },
+      // });
       dwdm_filterCDS = new Bokeh.ColumnDataSource({
         data: {
-          x: dwdm_filter_spectrum.x,
-          y: dwdm_filter_spectrum.y,
+          x_idler: WLIdlerairJSI.map((value) => value * 1e9),
+          x_signal: WLSignalairJSI.map((value) => value * 1e9),
+          y_idler: filter_comb_idler.out_array,
+          y_signal: filter_comb_signal.out_array,
+
+          y_idler_airy: filter_comb_idler_and_airy,
+          y_signal_airy: filter_comb_signal_and_airy,
         },
       });
 
@@ -185,7 +220,12 @@
         },
       });
 
+      const x_range = [wl_50ghz[0], wl_50ghz[wl_50ghz.length - 1]];
 
+      // const range_thing = new Bokeh.Plotting.Models.range1d({
+      //   start: wl_50ghz[0],
+      //   end: wl_50ghz[wl_50ghz.length - 1],
+      // });
       const scope = new Bokeh.Plotting.figure({
         // title: "Example of random data",
         // tools: "pan,wheel_zoom,box_zoom,reset,save",
@@ -196,8 +236,18 @@
         active_drag: "xwheel_zoom",
         sizing_mode: "stretch_width",
         height: 250,
-        x_range: [wl_50ghz[0], wl_50ghz[wl_50ghz.length - 1]],
+        x_range: x_range,
         y_range: [0, d3.max(ASignal)],
+        output_backend: "webgl",
+      });
+
+      const filter_graph = new Bokeh.Plotting.figure({
+        tools: "xwheel_zoom, xpan, reset",
+        active_drag: "xwheel_zoom",
+        sizing_mode: "stretch_width",
+        height: 250,
+        x_range: x_range,
+        y_range: [0, 1],
         output_backend: "webgl",
       });
 
@@ -213,11 +263,7 @@
         y_range: [1.65, 1.825],
       });
 
-      const filter_graph = new Bokeh.Plotting.figure({
-        height: 300,
-        x_range: [-10, 10],
-        y_range: [0, 5],
-      });
+      
 
       scope.toolbar.logo = null;
       const line_1 = scope.line(
@@ -241,12 +287,42 @@
       );
 
       const filter_line_1 = filter_graph.line(
-        { field: "x" },
-        { field: "y" },
+        { field: "x_idler" },
+        { field: "y_idler" },
         {
           line_width: 3,
           source: dwdm_filterCDS,
           line_color: "#333333",
+        },
+      );
+
+      const filter_line_2 = filter_graph.line(
+        { field: "x_signal" },
+        { field: "y_signal" },
+        {
+          line_width: 3,
+          source: dwdm_filterCDS,
+          line_color: "#FF3333",
+        },
+      );
+
+      const filter_line_passage_1 = filter_graph.line(
+        { field: "x_signal" },
+        { field: "y_signal_airy" },
+        {
+          line_width: 3,
+          source: dwdm_filterCDS,
+          line_color: "#3333FF",
+        },
+      );
+
+      const filter_line_passage_2 = filter_graph.line(
+        { field: "x_idler" },
+        { field: "y_idler_airy" },
+        {
+          line_width: 3,
+          source: dwdm_filterCDS,
+          line_color: "#33FF33",
         },
       );
 
@@ -262,8 +338,8 @@
 
       const doc = new Bokeh.Document();
       doc.add_root(scope);
-      doc.add_root(index_graph);
       doc.add_root(filter_graph);
+      doc.add_root(index_graph);
 
       const plotElement = document.getElementById("plot");
 
