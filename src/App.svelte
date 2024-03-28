@@ -30,6 +30,7 @@
   let idlerCDS;
   let dwdm_filterCDS;
   let indexCDS;
+  let fourierCDS;
 
   let backup_array;
   let old_show_2d = true;
@@ -52,10 +53,10 @@
     BW: 10e-9, // bandwidth in m
     WLSigma: 0.815, // sigma in nm
     L: 1, // length in mm
-    L_multiplier: 1.708,
+    L_multiplier: 1.71,
     R1: 0.85,
     R2: 0.1,
-    Texpt: 128.25,
+    Texpt: 24,
     pump_checked: false,
     phase_matching_checked: true,
     waveguide_checked: false,
@@ -64,7 +65,7 @@
     end_idler: 1568.36,
     start_signal: 1528.77,
     end_signal: 1548.11,
-    polling_period: 1 / 28380
+    polling_period: 35.7782
   };
 
   const wl_50ghz = create_50ghz_wl(); //goes from short to long wl in nm
@@ -79,6 +80,8 @@
     if (isNaN(p.L_multiplier)) {
       return 1;
     }
+
+    const polling_period = p.polling_period*1e-6;
 
     const WLSigma = p.WLSigma * 1e-9;
     const L = p.L * 1e-3 * p.L_multiplier;
@@ -99,7 +102,6 @@
     let nIdler = new Array(WLSignalairJSI.length).fill(1);
 
     if (p.ppktp_checked) {
-
       index_function = raicol_n.index_function;
     } else {
       index_function = n_ppln;
@@ -125,18 +127,10 @@
     //   501,
     // );
 
-    const full_spectrum = linspace(
-      500,
-      3500,
-      501,
-    );
+    const full_spectrum = linspace(500, 3500, 501);
     const full_index = full_spectrum.map((value) =>
       index_function(value * 1e-9, p.Texpt, false),
     );
-
-
-
-    
 
     // console.log("full index: ", full_index)
     // console.log(full_spectrum.map((value) => value * 1e-9))
@@ -150,9 +144,12 @@
       signalCDS.data.x.length == p.numWLs &&
       old_show_2d == p.show_2d
     ) {
-
-    const filter_comb_idler_and_airy = filter_comb_idler.out_array.map((value, i) => value * AIdler[i])
-    const filter_comb_signal_and_airy = filter_comb_signal.out_array.map((value, i) => value * ASignal[i])
+      const filter_comb_idler_and_airy = filter_comb_idler.out_array.map(
+        (value, i) => value * AIdler[i],
+      );
+      const filter_comb_signal_and_airy = filter_comb_signal.out_array.map(
+        (value, i) => value * ASignal[i],
+      );
 
       indexCDS.data.x = full_spectrum;
       indexCDS.data.y = full_index;
@@ -164,19 +161,37 @@
       dwdm_filterCDS.data.asignal = ASignal;
       dwdm_filterCDS.data.aidler = AIdler;
 
+      const wlSection = WLIdlerairJSI.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
+      const transSection = filter_comb_idler_and_airy.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
+
+      fourierCDS.data.x = wlSection;
+      fourierCDS.data.y = transSection;
 
       dwdm_filterCDS.change.emit();
       signalCDS.change.emit();
       idlerCDS.change.emit();
       indexCDS.change.emit();
+      fourierCDS.change.emit();
     } else {
+      filter_comb_idler = new FilterComb(
+        dwdm_filter_spectrum,
+        WLIdlerairJSI.map((value) => value * 1e9),
+      );
+      filter_comb_signal = new FilterComb(
+        dwdm_filter_spectrum,
+        WLSignalairJSI.map((value) => value * 1e9),
+      );
 
-      filter_comb_idler = new FilterComb(dwdm_filter_spectrum, WLIdlerairJSI.map((value) => value * 1e9))
-      filter_comb_signal = new FilterComb(dwdm_filter_spectrum, WLSignalairJSI.map((value) => value * 1e9))
+      const filter_comb_idler_and_airy = filter_comb_idler.out_array.map(
+        (value, i) => value * AIdler[i],
+      );
 
-      const filter_comb_idler_and_airy = filter_comb_idler.out_array.map((value, i) => value * AIdler[i])
-      const filter_comb_signal_and_airy = filter_comb_signal.out_array.map((value, i) => value * ASignal[i])
+      const filter_comb_signal_and_airy = filter_comb_signal.out_array.map(
+        (value, i) => value * ASignal[i],
+      );
 
+      const wlSection = WLIdlerairJSI.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
+      const transSection = filter_comb_idler_and_airy.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
 
       // console.log("re-init")
       if (!p.show_2d) {
@@ -227,7 +242,19 @@
         },
       });
 
-      const x_range = [wl_50ghz[0], wl_50ghz[wl_50ghz.length - 1]];
+      fourierCDS = new Bokeh.ColumnDataSource({
+        data: {
+          x: wlSection,
+          y: transSection,
+        },
+      });
+
+      // const x_range = [wl_50ghz[0], wl_50ghz[wl_50ghz.length - 1]];
+
+      const x_range = new Bokeh.Range1d({
+        start: wl_50ghz[0],
+        end: wl_50ghz[wl_50ghz.length - 1],
+      });
 
       // const range_thing = new Bokeh.Plotting.Models.range1d({
       //   start: wl_50ghz[0],
@@ -270,7 +297,11 @@
         y_range: [1.65, 1.825],
       });
 
-      
+      const fourier_graph = new Bokeh.Plotting.figure({
+        height: 300,
+        // x_range: [500, 3500],
+        // y_range: [1.65, 1.825],
+      });
 
       scope.toolbar.logo = null;
       const line_1 = scope.line(
@@ -300,7 +331,7 @@
           line_width: 3,
           line_alpha: 0.3,
           source: dwdm_filterCDS,
-          line_color: "#333333",
+          line_color: "#FF3333",
         },
       );
 
@@ -367,10 +398,21 @@
         },
       );
 
+      const trans_line = fourier_graph.line(
+        { field: "x" },
+        { field: "y" },
+        {
+          source: fourierCDS,
+          line_width: 3,
+          line_color: "#333333",
+        },
+      );
+
       const doc = new Bokeh.Document();
       doc.add_root(scope);
       doc.add_root(filter_graph);
       doc.add_root(index_graph);
+      doc.add_root(fourier_graph);
 
       const plotElement = document.getElementById("plot");
 
@@ -396,11 +438,11 @@
       ? OmegaSignalJSI.map((os, i) => {
           return OmegaIdlerJSI.map((oi, j) => {
             let debug_show = false;
-            if (i==100 && j==501-100) {
+            if (i == 100 && j == 501 - 100) {
               debug_show = true;
             }
 
-            if (i==400 && j==501-400) {
+            if (i == 400 && j == 501 - 400) {
               debug_show = true;
             }
             // if (Math.abs(i - 100) <= 5 && Math.abs(j - (501 - 100)) <= 5) {
@@ -420,11 +462,11 @@
               : 1;
             const ps = p.phase_matching_checked
               ? phase_matching(
-                2 * Math.PI * p.c/oi,
-                2 * Math.PI * p.c/os,
+                  (2 * Math.PI * p.c) / oi,
+                  (2 * Math.PI * p.c) / os,
                   index_function,
                   p.Texpt,
-                  p.polling_period,
+                  polling_period,
                   L,
                   debug_show,
                 )
@@ -445,6 +487,61 @@
       : backup_array;
 
     if (p.show_2d) {
+      // still trying to figure out how to initialize 2d plot
+      
+
+      // see here for syntax that last worked
+
+      // const source_im = new Bokeh.ColumnDataSource({
+      //   data: {
+      //     image: JSI,
+      //   },
+      // });
+
+      // console.log(Bokeh);
+
+      
+
+      // const source = new Bokeh.ColumnDataSource({
+      //   data: {
+      //     image: [
+      //       [
+      //         [0, 1, 0.25],
+      //         [1, 0, 0.75],
+      //       ],
+      //     ],
+      //     x: [0],
+      //     x2: [1],
+      //     x3: [2],
+      //     y: [1],
+      //     dw: [0.8],
+      //     dh: [1],
+      //   },
+      // });
+
+      // var plott = Bokeh.Plotting.figure({
+      //   title: "Example of Random data",
+      //   tools: "pan,wheel_zoom,box_zoom,reset,save",
+      //   height: 300,
+      //   width: 900,
+      // });
+
+      // // add a line with data from the source
+      // plott.image({
+      //   image: { field: "image" },
+      //   x: { field: "x" },
+      //   y: { field: "y" },
+      //   dw: { field: "dw" },
+      //   dh: { field: "dh" },
+      //   // color_mapper: cmap,
+      //   source: source,
+      // });
+
+      // const doc = new Bokeh.Document();
+      // doc.add_root(plott);
+      // const plotElement = document.getElementById("plot_2");
+      // Bokeh.embed.add_document_standalone(doc, plotElement);
+
       canvas.style.opacity = 1;
       imshow(
         JSI,
@@ -464,19 +561,17 @@
     }
   }
 
-
   onMount(async () => {
     const filter_response = await fetch("./50_GHz_spectrum.json");
     dwdm_filter_spectrum = await filter_response.json();
 
-    const n_ppktp_data = await fetch("./ppKTP_n.json").then(response => response.json());
+    const n_ppktp_data = await fetch("./ppKTP_n.json").then((response) =>
+      response.json(),
+    );
 
-    raicol_n = new RaicolNDataPPKTP(n_ppktp_data)
-
+    raicol_n = new RaicolNDataPPKTP(n_ppktp_data);
 
     compute_result(params, true);
-
-
 
     // Create axes
     const xAxis = d3.axisBottom(
@@ -609,6 +704,7 @@
   ></canvas>
   <svg bind:this={svg} style="position: absolute; left: 0; top: 0;"></svg>
   <div id="plot" class="graph_2d"></div>
+  <!-- <div id="plot_2" class="graph_2d_2"></div> -->
   <div class="checks">
     <div class="bbox" style="">
       <h4 style="display: block; margin: 0px 0px;">Idler</h4>
@@ -730,8 +826,8 @@
     <p class="output">Cavity Length</p>
     <input
       type="range"
-      min=".995"
-      max="1.005"
+      min=".999"
+      max="1.001"
       step="0.000001"
       bind:value={params.L}
       class="slider"
@@ -758,20 +854,37 @@
   </div>
   <div
     class="slidecontainer"
-    class:slider-off={!(params.waveguide_checked && !params.ppktp_checked)}
+    class:slider-off={params.pump_checked}
     style="position: relative; top: 650px;"
   >
     <p class="output">Temperature</p>
     <input
       type="range"
-      min="0"
-      max="200"
+      min="-50"
+      max="100"
       step="1"
       bind:value={params.Texpt}
       class="slider"
       id="myRange_1"
     />
     <p class="output">{params.Texpt} Celsius</p>
+  </div>
+  <div
+    class="slidecontainer"
+    class:slider-off={params.pump_checked}
+    style="position: relative; top: 650px;"
+  >
+    <p class="output">Polling Period</p>
+    <input
+      type="range"
+      min="10"
+      max="50"
+      step="0.001"
+      bind:value={params.polling_period}
+      class="slider"
+      id="myRange_1"
+    />
+    <p class="output">{params.polling_period} um</p>
   </div>
   <div
     class="slidecontainer"
@@ -844,6 +957,14 @@
     left: 740px;
     width: 1500px;
     height: 0px;
+  }
+
+  .graph_2d_2 {
+    position: relative;
+    top: 90px;
+    left: 740px;
+    width: 1500px;
+    height: 1500px;
   }
 
   .ppln,

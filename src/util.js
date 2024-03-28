@@ -109,31 +109,48 @@ export function sellimeier_ppln_single(WL, pol, T) {
     return n;
 }
 
-export function Sellimeier_PPKTP(n, WL) {
-    WL = WL * 1e6;
+// export function Sellimeier_PPKTP(n, WL) {
+//     WL = WL * 1e6;
 
-    let A, B, C, D;
-    if (n === "nx") {
-        A = 2.1146;
-        B = 0.89188;
-        C = 0.20861;
-        D = 0.01320;
-    } else if (n === "ny") {
-        A = 2.1518;
-        B = 0.87862;
-        C = 0.21801;
-        D = 0.01327;
-    } else if (n === "nz") {
-        A = 2.3136;
-        B = 1.00012;
-        C = 0.23831;
-        D = 0.01679;
-    }
+//     let A, B, C, D;
+//     if (n === "nx") {
+//         A = 2.1146;
+//         B = 0.89188;
+//         C = 0.20861;
+//         D = 0.01320;
+//     } else if (n === "ny") {
+//         A = 2.1518;
+//         B = 0.87862;
+//         C = 0.21801;
+//         D = 0.01327;
+//     } else if (n === "nz") {
+//         A = 2.3136;
+//         B = 1.00012;
+//         C = 0.23831;
+//         D = 0.01679;
+//     }
 
-    n = Math.sqrt(A + B / (1 - Math.pow(C / WL, 2)) - D * Math.pow(WL, 2));
+//     n = Math.sqrt(A + B / (1 - Math.pow(C / WL, 2)) - D * Math.pow(WL, 2));
 
-    return n;
+//     return n;
+// }
+
+export function Sellimeier_PPKTP(direction, WL) {
+    // this is acctually the nx value, the curve matches the data sent by raicol
+
+    // nx
+    return math.sqrt(3.29100 + (0.04140/(WL**2 - 0.03978)) + 9.35522/(WL**2 - 31.45571))
+
+
+    // ny 
+    // return math.sqrt(3.45018 + 0.04341/(WL**2 - 0.04597) + 16.98825/(WL**2 - 39.43799))
+
+
+
+    //nz
+    // return math.sqrt(4.59423 + 0.06206/(WL**2 - 0.04763) + 110.80672/(WL**2 - 86.12171))
 }
+
 
 export function n_raicol_ppktp(WL, T, debug=false) {
     if (debug) {
@@ -204,11 +221,11 @@ export function delta_k(WL1, WL2, index_function, T, polling_period, debug_show 
     //     console.log("WL2: ", WL2);
     // }
 
-    const nWL1 = index_function(WL1, T);
-    const nWL2 = index_function(WL2, T);
+    const nWL1 = index_function(WL1, T, debug_show);
+    const nWL2 = index_function(WL2, T, debug_show);
 
     const WL_pump = wl_pump_by_energy_conservation(WL1, WL2, index_function, T);
-    const nPump = index_function(WL_pump, T);
+    const nPump = index_function(WL_pump, T, debug_show);
 
     
 
@@ -310,7 +327,22 @@ export function RaicolNDataPPKTP(data) {
     // calling the function directly 'on' the object
     this.index_function = (WL, T, debug=false) => {
         // console.log("this.wl: ", this.wl)
-        return interp(WL, this.wl, this.n);
+
+        const delta_T = T - 24;
+
+        // if (debug) {
+        //     console.log("WL: ", WL)
+        // }
+        const wl = WL * 1e6;
+
+        const del_n_del_t = ((0.1717/(wl**3)) - (0.5353/(wl**2)) + (0.8416/wl) + 0.1627) * 1e-5;
+        // console.log(del_n_del_t)
+        // if (debug) {
+        //     console.log("del_n_del_t: ", del_n_del_t)
+        // }
+
+        return Number(Sellimeier_PPKTP("nx", WL*1e6)) + del_n_del_t * delta_T;
+        // return interp(WL, this.wl, this.n);
     }
 }
 
