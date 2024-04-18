@@ -3,6 +3,7 @@
   import * as d3 from "d3";
   import * as math from "mathjs";
   import Toggle from "./Toggle.svelte";
+  import ft from "fourier-transform";
 
   import {
     linspace,
@@ -18,6 +19,7 @@
     phase_matching,
     RaicolNDataPPKTP,
     FilterComb,
+    interp
   } from "./util.js";
 
   let canvas; // reference to the canvas element
@@ -48,24 +50,24 @@
   const params = {
     show_2d: true,
     c: 299792458, // speed of light in m/s
-    WLpumpair: 774.1,
+    WLpumpair: 774.08,
     numWLs: 501,
     BW: 10e-9, // bandwidth in m
     WLSigma: 0.815, // sigma in nm
     L: 1, // length in mm
-    L_multiplier: 1.71,
+    L_multiplier: 1.62, // 1.71,
     R1: 0.85,
     R2: 0.1,
-    Texpt: 24,
-    pump_checked: false,
+    Texpt: 88, //24,
+    pump_checked: true,
     phase_matching_checked: true,
-    waveguide_checked: false,
+    waveguide_checked: true,
     ppktp_checked: true,
     start_idler: 1548.51,
     end_idler: 1568.36,
     start_signal: 1528.77,
     end_signal: 1548.11,
-    polling_period: 35.7782
+    polling_period: 24.838
   };
 
   const wl_50ghz = create_50ghz_wl(); //goes from short to long wl in nm
@@ -164,8 +166,23 @@
       const wlSection = WLIdlerairJSI.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
       const transSection = filter_comb_idler_and_airy.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
 
-      fourierCDS.data.x = wlSection;
-      fourierCDS.data.y = transSection;
+      // const transF = ft(transSection)
+
+      const x_256 = linspace(wlSection[0], wlSection[wlSection.length - 1], 256);
+      const y_256 = interp(x_256, wlSection, transSection);
+
+
+      const transF = ft(y_256)
+
+      const x_256_f = x_256.map((value) => p.c/value);
+      const df = x_256_f[x_256_f.length - 2] - x_256_f[x_256_f.length - 1]
+      // console.log("df: ", df)
+      const dt = 1/(df*255)
+      const t = linspace(0, dt*256, 256).map((value) => value * 1e12)
+
+      fourierCDS.data.x = t.slice(0,128);
+      // fourierCDS.data.y = transSection;
+      fourierCDS.data.y = transF;
 
       dwdm_filterCDS.change.emit();
       signalCDS.change.emit();
@@ -193,7 +210,20 @@
       const wlSection = WLIdlerairJSI.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
       const transSection = filter_comb_idler_and_airy.slice(Math.floor(p.numWLs*.01),Math.floor(p.numWLs*.0306))
 
-      // console.log("re-init")
+      const x_256 = linspace(wlSection[0], wlSection[wlSection.length - 1], 256);
+      const y_256 = interp(x_256, wlSection, transSection);
+
+
+      const transF = ft(y_256)
+
+      const x_256_f = x_256.map((value) => p.c/value);
+      const df = x_256_f[x_256_f.length - 2] - x_256_f[x_256_f.length - 1]
+      // console.log("df: ", df)
+      const dt = 1/(df*255)
+      const t = linspace(0, dt*256, 256).map((value) => value * 1e12)
+
+
+
       if (!p.show_2d) {
         const inner_off_array = Array(OmegaIdlerJSI.length).fill(1);
         backup_array = Array(OmegaSignalJSI.length).fill(inner_off_array);
@@ -244,8 +274,11 @@
 
       fourierCDS = new Bokeh.ColumnDataSource({
         data: {
-          x: wlSection,
-          y: transSection,
+          // x: wlSection,
+          // y: transSection,
+          x: t.slice(0,128),
+          y: transF,
+          // y: transF,
         },
       });
 
@@ -292,15 +325,21 @@
       // });
 
       const index_graph = new Bokeh.Plotting.figure({
+        title: "Index of Refraction nz",
         height: 300,
         x_range: [500, 3500],
-        y_range: [1.65, 1.825],
+        y_range: [1.75, 1.925],
+        x_axis_label: "Wavelength (nm)",
+        y_axis_label: "Index of Refraction",
       });
 
       const fourier_graph = new Bokeh.Plotting.figure({
+        title: "Half of pulse in time-domain",
         height: 300,
-        // x_range: [500, 3500],
+        x_range: [0, 500],
         // y_range: [1.65, 1.825],
+        x_axis_label: "Time (ps)",
+        y_axis_label: "Intensity",
       });
 
       scope.toolbar.logo = null;
@@ -792,8 +831,8 @@
     <p class="output">Pump WL</p>
     <input
       type="range"
-      min="750"
-      max="800"
+      min="770"
+      max="780"
       step="0.001"
       bind:value={params.WLpumpair}
       class="slider"
@@ -854,7 +893,7 @@
   </div>
   <div
     class="slidecontainer"
-    class:slider-off={params.pump_checked}
+    class:slider-off={!(params.waveguide_checked || params.phase_matching_checked)}
     style="position: relative; top: 650px;"
   >
     <p class="output">Temperature</p>
@@ -871,14 +910,14 @@
   </div>
   <div
     class="slidecontainer"
-    class:slider-off={params.pump_checked}
+    class:slider-off={!(params.waveguide_checked || params.phase_matching_checked)}
     style="position: relative; top: 650px;"
   >
     <p class="output">Polling Period</p>
     <input
       type="range"
-      min="10"
-      max="50"
+      min="20"
+      max="30"
       step="0.001"
       bind:value={params.polling_period}
       class="slider"

@@ -139,16 +139,15 @@ export function Sellimeier_PPKTP(direction, WL) {
     // this is acctually the nx value, the curve matches the data sent by raicol
 
     // nx
-    return math.sqrt(3.29100 + (0.04140/(WL**2 - 0.03978)) + 9.35522/(WL**2 - 31.45571))
+    // return math.sqrt(3.29100 + (0.04140/(WL**2 - 0.03978)) + 9.35522/(WL**2 - 31.45571))
 
 
     // ny 
     // return math.sqrt(3.45018 + 0.04341/(WL**2 - 0.04597) + 16.98825/(WL**2 - 39.43799))
 
 
-
-    //nz
-    // return math.sqrt(4.59423 + 0.06206/(WL**2 - 0.04763) + 110.80672/(WL**2 - 86.12171))
+    // nz
+    return math.sqrt(4.59423 + 0.06206/(WL**2 - 0.04763) + 110.80672/(WL**2 - 86.12171))
 }
 
 
